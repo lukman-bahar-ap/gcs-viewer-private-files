@@ -1,0 +1,4 @@
+secure-config/*
+.env
+go.sum
+go.mod
