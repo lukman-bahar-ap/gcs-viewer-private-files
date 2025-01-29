@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"gcs-viewer/handlers"
 	"net/http"
-
+	"os"
 	"github.com/joho/godotenv"
 )
 
@@ -14,9 +14,9 @@ func main() {
 		fmt.Println("Error loading .env file:", err)
 		return
 	}
-
+	hostname := os.Getenv("HOST")
 	http.HandleFunc("/view-file", handlers.ViewFileHandler)
-	fmt.Println("Server running at http://localhost:8080")
+	fmt.Println("Server running at ",hostname,":8080")
 
 	http.ListenAndServe(":8080", nil)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
