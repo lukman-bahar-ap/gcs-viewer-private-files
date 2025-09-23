@@ -9,3 +9,5 @@ GOOGLE_APPLICATION_CREDENTIALS=your-location-gcp-iam-service-account
 BUCKET_NAME=your-bucket-name
 FILE_NAME=your-location-and-file-name
 ```
+
+gcloud storage objects list --bucket=sipp-be-files --prefix="document/catatan-harian/" --limit=10 --format="value(name)"

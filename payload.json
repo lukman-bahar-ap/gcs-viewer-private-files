@@ -1,0 +1,8 @@
+{
+  "sources": [
+    "PATH-FILE",
+    "PATH-FILE",
+    "PATH-FILE"
+  ],
+  "dest": "merged/NAMA-FILE-HASIL-MERGE"
+}
