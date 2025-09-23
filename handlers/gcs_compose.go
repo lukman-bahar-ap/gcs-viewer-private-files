@@ -72,7 +72,7 @@ func recursiveCompose(ctx context.Context, client *storage.Client, bucketName st
 		err = composeFiles(ctx, client, bucketName, intermediates, finalDest)
 	}
 
-	// Cleanup intermediates kalau sukses
+	// Cleanup intermediates
 	if err == nil {
 		for _, obj := range intermediates {
 			_ = client.Bucket(bucketName).Object(obj).Delete(ctx)
@@ -99,7 +99,7 @@ func MergeHandler(client *storage.Client) http.HandlerFunc {
 		bucketName := os.Getenv("BUCKET_NAME")
 		ctx := r.Context()
 
-		err := recursiveCompose(ctx, client, bucketName, req.Sources, req.Dest, "some-request-id") // TODO: Generate a proper request ID
+		err := recursiveCompose(ctx, client, bucketName, req.Sources, req.Dest, "some-request-id-untuk-uniquesasi") // NOTE: perlu kode unik untuk membedakan setiap request supaya file intermediate tidak bertabrakan
 		if err != nil {
 			http.Error(w, fmt.Sprintf("merge failed: %v", err), http.StatusInternalServerError)
 			return
@@ -113,7 +113,6 @@ func MergeHandler(client *storage.Client) http.HandlerFunc {
 		}
 		defer rc.Close()
 
-		// Set header supaya browser langsung download
 		// w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", req.Dest))
 
