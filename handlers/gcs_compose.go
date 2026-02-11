@@ -2,15 +2,15 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"gcs-viewer/utils"
 	"io"
 	"os"
 
-	"net/http"
+	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/gofiber/fiber/v2"
 )
 
 type MergeRequest struct {
@@ -82,50 +82,48 @@ func recursiveCompose(ctx context.Context, client *storage.Client, bucketName st
 	return err
 }
 
-func MergeHandler(client *storage.Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func MergeHandler(client *storage.Client) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		var req MergeRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).SendString("Invalid request body")
 		}
-		defer r.Body.Close()
 
-		if len(req.Sources) == 0 {
-			http.Error(w, "sources cannot be empty", http.StatusBadRequest)
-			return
+		if len(req.Sources) == 0 || req.Dest == "" {
+			return c.Status(fiber.StatusBadRequest).SendString("Sources and destination must be provided")
 		}
+
+		// Use the client passed from main
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second) // Increased timeout for merge
+		defer cancel()
 
 		bucketName := os.Getenv("BUCKET_NAME")
-		ctx := r.Context()
-
-		err := recursiveCompose(ctx, client, bucketName, req.Sources, req.Dest, "some-request-id-untuk-uniquesasi") // NOTE: perlu kode unik untuk membedakan setiap request supaya file intermediate tidak bertabrakan
-		if err != nil {
-			http.Error(w, fmt.Sprintf("merge failed: %v", err), http.StatusInternalServerError)
-			return
+		if bucketName == "" {
+			return c.Status(fiber.StatusInternalServerError).SendString("Bucket name is not set in environment variables")
 		}
 
-		// Buka hasil merge
+		// Use a unique request ID (or just a random string) for intermediates to avoid collision
+		requestID := fmt.Sprintf("%d", time.Now().UnixNano())
+		err := recursiveCompose(ctx, client, bucketName, req.Sources, req.Dest, requestID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Failed to merge files: " + err.Error())
+		}
+
+		// Open the merged file
 		rc, err := client.Bucket(bucketName).Object(req.Dest).NewReader(ctx)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to read merged file: %v", err), http.StatusInternalServerError)
-			return
+			return c.Status(fiber.StatusInternalServerError).SendString("Failed to read merged file: " + err.Error())
 		}
 		defer rc.Close()
 
-		// w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", req.Dest))
+		c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", req.Dest))
+		contentType, _ := utils.GetContentType(req.Dest)
+		c.Set("Content-Type", contentType)
 
-		contentType, found := utils.GetContentType(req.Dest)
-		if !found {
-			http.Error(w, "Unsupported file type", http.StatusBadRequest)
-			return
+		if _, err := io.Copy(c.Response().BodyWriter(), rc); err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Failed to send file content: " + err.Error())
 		}
-		w.Header().Set("Content-Type", contentType)
 
-		if _, err := io.Copy(w, rc); err != nil {
-			http.Error(w, "Failed to send file content: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+		return nil
 	}
 }
